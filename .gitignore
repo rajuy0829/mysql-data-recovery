@@ -1,0 +1,7 @@
+*.ibd
+*.frm
+*.myd
+*.myi
+ibdata1
+ib_logfile*
+*.log
