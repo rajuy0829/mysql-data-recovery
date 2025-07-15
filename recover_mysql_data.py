@@ -1,51 +1,56 @@
 import os
 import shutil
-import sys
 
-# ======= CONFIG =======
-# Set your paths here
-BACKUP_FOLDER = r"D:\xampp\mysql\data_old"
-TARGET_DATA_FOLDER = r"D:\xampp\mysql\data"
+# Set the source (backup) and target (active MySQL) directories
+source_dir = r"D:\xampp\mysql\data_old"   # <- Change this if your backup folder is different
+target_dir = r"D:\xampp\mysql\data"
 
-# Table files to recover (add more if needed)
-TABLE_EXTENSIONS = [".frm", ".ibd", ".myd", ".myi", ".MRG", ".TRG", ".TRN"]
+# Extensions and filenames to copy
+valid_files = ['.frm', '.ibd', '.MYD', '.MYI', '.opt']
+specific_files = ['ib_logfile0', 'ib_logfile1', 'ibdata1']
 
-# =======================
+def copy_files():
+    if not os.path.exists(source_dir):
+        print(f"Source directory not found: {source_dir}")
+        return
 
-def copy_table_files(backup_folder, target_folder):
-    if not os.path.exists(backup_folder):
-        print(f"❌ Backup folder does not exist: {backup_folder}")
-        sys.exit(1)
+    if not os.path.exists(target_dir):
+        print(f"Target directory does not exist: {target_dir}")
+        os.makedirs(target_dir)
+        print(f"Created target directory: {target_dir}")
 
-    if not os.path.exists(target_folder):
-        print(f"❌ Target data folder does not exist: {target_folder}")
-        sys.exit(1)
+    # Copy files from root of data_old (like ibdata1, ib_logfile*)
+    for file in os.listdir(source_dir):
+        src_path = os.path.join(source_dir, file)
+        dst_path = os.path.join(target_dir, file)
 
-    print(f"📦 Recovering MySQL table files from:\n{backup_folder}\n→ To:\n{target_folder}\n")
+        if os.path.isfile(src_path) and (
+            any(file.endswith(ext) for ext in valid_files) or file in specific_files
+        ):
+            try:
+                shutil.copy2(src_path, dst_path)
+                print(f"Copied: {file}")
+            except Exception as e:
+                print(f"Failed to copy {file}: {e}")
 
-    files_copied = 0
-    for root, dirs, files in os.walk(backup_folder):
-        relative_path = os.path.relpath(root, backup_folder)
-        target_subfolder = os.path.join(target_folder, relative_path)
+    # Copy database folders and their contents
+    for db_dir in os.listdir(source_dir):
+        src_db_path = os.path.join(source_dir, db_dir)
+        dst_db_path = os.path.join(target_dir, db_dir)
 
-        if not os.path.exists(target_subfolder):
-            os.makedirs(target_subfolder)
+        if os.path.isdir(src_db_path):
+            if not os.path.exists(dst_db_path):
+                os.makedirs(dst_db_path)
 
-        for file in files:
-            if any(file.endswith(ext) for ext in TABLE_EXTENSIONS):
-                source_file = os.path.join(root, file)
-                dest_file = os.path.join(target_subfolder, file)
+            for file in os.listdir(src_db_path):
+                if any(file.endswith(ext) for ext in valid_files):
+                    try:
+                        shutil.copy2(os.path.join(src_db_path, file), os.path.join(dst_db_path, file))
+                        print(f"Copied: {db_dir}/{file}")
+                    except Exception as e:
+                        print(f"Failed to copy {db_dir}/{file}: {e}")
 
-                try:
-                    shutil.copy2(source_file, dest_file)
-                    print(f"✅ Copied: {source_file} → {dest_file}")
-                    files_copied += 1
-                except Exception as e:
-                    print(f"⚠️ Failed to copy {file}: {e}")
-
-    print(f"\n✅ Done! Total files copied: {files_copied}")
-    print("⚠️ Reminder: Make sure to use 'innodb_force_recovery' in my.ini if InnoDB crashes.")
-    print("⚠️ Restart MySQL after recovery and remove 'innodb_force_recovery' once complete.")
+    print("✅ Done copying MySQL files.")
 
 if __name__ == "__main__":
-    copy_table_files(BACKUP_FOLDER, TARGET_DATA_FOLDER)
+    copy_files()
